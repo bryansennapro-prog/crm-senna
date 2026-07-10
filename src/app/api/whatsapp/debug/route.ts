@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { processChange } from "@/lib/whatsapp/ingest";
 
 // Endpoint TEMPORÁRIO de diagnóstico. Protegido pelo WHATSAPP_VERIFY_TOKEN.
 // Não retorna tokens nem conteúdo de mensagens. Remover após depurar.
@@ -14,32 +13,6 @@ export async function GET(req: NextRequest) {
     return new Response("Forbidden", { status: 403 });
   }
 
-  const admin = createAdminClient();
-
-  // Modo probe: roda a ingestão de teste e devolve o erro exato, se houver.
-  if (req.nextUrl.searchParams.get("probe") === "1") {
-    let probeError: string | null = null;
-    try {
-      await processChange(admin, {
-        phoneNumberId: "1151825144687605",
-        contacts: [{ waId: "5511900000001", name: "Probe Diagnostico" }],
-        messages: [
-          {
-            waMessageId: "wamid.PROBE_" + Date.now(),
-            from: "5511900000001",
-            timestamp: new Date().toISOString(),
-            type: "text",
-            text: "probe de diagnostico",
-          },
-        ],
-        statuses: [],
-      });
-    } catch (e) {
-      probeError = e instanceof Error ? e.message : String(e);
-    }
-    return NextResponse.json({ probe: true, probeError });
-  }
-
   const env = {
     NEXT_PUBLIC_SUPABASE_URL_set: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY_set: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -50,6 +23,7 @@ export async function GET(req: NextRequest) {
 
   let db: any = { ok: false };
   try {
+    const admin = createAdminClient();
     const [channels, conversations, contacts, messages] = await Promise.all([
       admin
         .from("whatsapp_channels")
