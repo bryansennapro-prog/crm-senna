@@ -13,6 +13,97 @@ export async function GET(req: NextRequest) {
     return new Response("Forbidden", { status: 403 });
   }
 
+  const admin = createAdminClient();
+
+  // Probe inline: grava passo a passo como service_role e reporta cada erro.
+  if (req.nextUrl.searchParams.get("probe") === "1") {
+    const steps: any = {};
+    const wa = "PROBE_" + Date.now();
+
+    const ch = await admin
+      .from("whatsapp_channels")
+      .select("id, tenant_id")
+      .eq("phone_number_id", "1151825144687605")
+      .maybeSingle();
+    steps.channel_error = ch.error?.message ?? null;
+    steps.channel_found = !!ch.data;
+    const tenantId = (ch.data as any)?.tenant_id ?? null;
+    steps.tenant_id = tenantId;
+
+    if (tenantId) {
+      const c = await admin
+        .from("contacts")
+        .insert({
+          tenant_id: tenantId,
+          wa_id: wa,
+          telefone_whatsapp: "+000",
+          nome: "PROBE",
+        })
+        .select("id, company_id")
+        .single();
+      steps.contact_error = c.error?.message ?? null;
+      const contactId = (c.data as any)?.id ?? null;
+      steps.contact_id = contactId;
+
+      if (contactId) {
+        const comp = await admin
+          .from("companies")
+          .insert({ tenant_id: tenantId, nome: "PROBE", lifecycle_stage: "lead" })
+          .select("id")
+          .single();
+        steps.company_error = comp.error?.message ?? null;
+        const companyId = (comp.data as any)?.id ?? null;
+
+        const conv = await admin
+          .from("conversations")
+          .insert({
+            tenant_id: tenantId,
+            channel_id: (ch.data as any).id,
+            contact_id: contactId,
+            company_id: companyId,
+            status: "aberta",
+          })
+          .select("id")
+          .single();
+        steps.conversation_error = conv.error?.message ?? null;
+        const convId = (conv.data as any)?.id ?? null;
+
+        const deal = await admin
+          .from("deals")
+          .insert({
+            tenant_id: tenantId,
+            company_id: companyId,
+            contact_id: contactId,
+            titulo: "PROBE",
+            status: "aberto",
+            conversation_id: convId,
+          })
+          .select("id")
+          .single();
+        steps.deal_error = deal.error?.message ?? null;
+
+        const msg = await admin
+          .from("messages")
+          .insert({
+            tenant_id: tenantId,
+            conversation_id: convId,
+            contact_id: contactId,
+            direction: "inbound",
+            wa_message_id: wa,
+            tipo: "text",
+            conteudo: "probe",
+            status: "received",
+            timestamp: new Date().toISOString(),
+          })
+          .select("id")
+          .single();
+        steps.message_error = msg.error?.message ?? null;
+      }
+    }
+
+    return NextResponse.json({ probe: true, steps });
+  }
+
   const env = {
     NEXT_PUBLIC_SUPABASE_URL_set: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY_set: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -23,7 +114,6 @@ export async function GET(req: NextRequest) {
 
   let db: any = { ok: false };
   try {
-    const admin = createAdminClient();
     const [channels, conversations, contacts, messages] = await Promise.all([
       admin
         .from("whatsapp_channels")
