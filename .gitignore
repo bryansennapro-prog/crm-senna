@@ -33,3 +33,12 @@ next-env.d.ts
 
 # claude code (config local da máquina)
 .claude/
+
+# package-lock: removido do versionamento (a Vercel gera no build)
+package-lock.json
+
+# arquivos que não pertencem ao CRM (landing e scripts) — repositório separado
+/landing/
+/landing-senna.dc.html
+/apps-script-leads.gs
+/tmp-static-server.js
