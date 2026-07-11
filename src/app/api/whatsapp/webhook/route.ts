@@ -27,8 +27,26 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const raw = await req.text();
   const signature = req.headers.get("x-hub-signature-256");
+  const sigValid = verifySignature(
+    raw,
+    signature,
+    process.env.WHATSAPP_APP_SECRET
+  );
 
-  if (!verifySignature(raw, signature, process.env.WHATSAPP_APP_SECRET)) {
+  // Log diagnóstico de TODA chamada recebida (para confirmar entrega da Meta).
+  try {
+    await createAdminClient()
+      .from("webhook_log")
+      .insert({
+        has_signature: !!signature,
+        signature_valid: sigValid,
+        body_preview: raw.slice(0, 400),
+      });
+  } catch {
+    // tabela pode não existir ainda; ignora
+  }
+
+  if (!sigValid) {
     return new Response("Invalid signature", { status: 401 });
   }
 
