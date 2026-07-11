@@ -15,6 +15,27 @@ export async function GET(req: NextRequest) {
 
   const admin = createAdminClient();
 
+  // Inscrição do app na WABA (subscribed_apps). ?sub=check lê, ?sub=subscribe inscreve.
+  const sub = req.nextUrl.searchParams.get("sub");
+  if (sub) {
+    const { data: ch } = await admin
+      .from("whatsapp_channels")
+      .select("waba_id, access_token")
+      .limit(1)
+      .maybeSingle();
+    const wabaId = (ch as any)?.waba_id;
+    const token = (ch as any)?.access_token;
+    const version = process.env.WHATSAPP_GRAPH_VERSION || "v21.0";
+    const url = `https://graph.facebook.com/${version}/${wabaId}/subscribed_apps`;
+    const method = sub === "subscribe" ? "POST" : "GET";
+    const r = await fetch(url, {
+      method,
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const body = await r.json().catch(() => null);
+    return NextResponse.json({ sub, waba_id: wabaId, http_status: r.status, body });
+  }
+
   // Probe inline: grava passo a passo como service_role e reporta cada erro.
   if (req.nextUrl.searchParams.get("probe") === "1") {
     const steps: any = {};
