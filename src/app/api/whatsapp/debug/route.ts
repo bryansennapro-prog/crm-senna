@@ -26,8 +26,16 @@ export async function GET(req: NextRequest) {
     const wabaId = (ch as any)?.waba_id;
     const token = (ch as any)?.access_token;
     const version = process.env.WHATSAPP_GRAPH_VERSION || "v21.0";
-    const url = `https://graph.facebook.com/${version}/${wabaId}/subscribed_apps`;
+    let url = `https://graph.facebook.com/${version}/${wabaId}/subscribed_apps`;
     const method = sub === "subscribe" ? "POST" : "GET";
+    if (sub === "subscribe") {
+      const params = new URLSearchParams({
+        override_callback_uri:
+          "https://crm-senna.vercel.app/api/whatsapp/webhook",
+        verify_token: process.env.WHATSAPP_VERIFY_TOKEN || "",
+      });
+      url = `${url}?${params.toString()}`;
+    }
     const r = await fetch(url, {
       method,
       headers: { Authorization: `Bearer ${token}` },
